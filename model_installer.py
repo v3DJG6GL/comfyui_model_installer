@@ -608,25 +608,26 @@ class ModelInstaller:
     def _create_workflow_index(self) -> Dict:
         """Create new workflow index from comfyui_workflow_templates module."""
         index = {}
-
-        # --- REPLACEMENT START ---
         try:
             import comfyui_workflow_templates
             import importlib.resources
 
             logging.info("[Model Installer] Loading workflow templates from comfyui_workflow_templates module")
 
-            # SAFEGUARD: Check if the 'templates' folder actually exists before crashing
-            try:
-                templates_path = importlib.resources.files(comfyui_workflow_templates) / 'templates'
-                if not templates_path.is_dir():
-                    logging.warning("[Model Installer] 'templates' directory missing. Skipping built-in templates.")
-                    return index  # Return empty index safely
+            # Get templates directory from module
+            templates_path = importlib.resources.files(comfyui_workflow_templates) / 'templates'
 
+            # Check if templates directory exists before attempting to iterate
+            if not templates_path.is_dir():
+                logging.warning(f"[Model Installer] Templates directory not found: {templates_path}")
+                logging.info("[Model Installer] Workflow validation disabled - no templates available")
+                return {}
+
+            try:
                 json_files = [f for f in templates_path.iterdir() if f.name.endswith('.json') and f.name != 'index.json']
-            except (FileNotFoundError, NotADirectoryError, TypeError):
-                logging.warning("[Model Installer] Could not access templates path. Skipping built-in templates.")
-                return index
+            except (FileNotFoundError, NotADirectoryError, PermissionError) as e:
+                logging.warning(f"[Model Installer] Cannot access templates directory: {e}")
+                return {}
 
             logging.info(f"[Model Installer] Found {len(json_files)} workflow template files")
 
@@ -634,36 +635,53 @@ class ModelInstaller:
                 try:
                     content = json_file.read_text(encoding='utf-8')
                     workflow_data = json.loads(content)
-
-                    # Original logic to parse the workflow...
-                    # (You can copy the original parsing loop logic here if you want,
-                    #  but if you just want to stop the crash, you can leave this loop empty
-                    #  or use the code below to keep scanning logic intact)
-
                     models_found = 0
-                    if "extra_data" in workflow_data and "extra_pnginfo" in workflow_data["extra_data"]:
-                         workflow = workflow_data["extra_data"]["extra_pnginfo"].get("workflow", {})
-                    else:
-                         workflow = workflow_data
 
-                    # Scan the workflow for models (Simplified from original)
-                    required_models = self._scan_workflow(workflow)
-                    for model in required_models:
-                        if model['filename'] not in index:
-                            index[model['filename']] = []
-                        index[model['filename']].append(json_file.name)
-                        models_found += 1
+                    # Parse structured model metadata from properties.models arrays
+                    def extract_models_from_node(node_data):
+                        nonlocal models_found
+                        if isinstance(node_data, dict):
+                            # Check if this node has properties.models
+                            if "properties" in node_data and isinstance(node_data["properties"], dict):
+                                if "models" in node_data["properties"] and isinstance(node_data["properties"]["models"], list):
+                                    for model in node_data["properties"]["models"]:
+                                        if isinstance(model, dict) and "name" in model and "url" in model and "directory" in model:
+                                            filename = model["name"]
+                                            url = model["url"]
+                                            directory = model["directory"]
+                                            key = f"{directory}/{filename}"
+
+                                            if key not in index:
+                                                index[key] = {"urls": set(), "workflows": set()}
+                                            index[key]["urls"].add(url)
+                                            index[key]["workflows"].add(json_file.name)
+                                            models_found += 1
+                                            logging.debug(f"[Model Installer] Found structured model: {key} -> {url}")
+
+                            # Recursively check all nested objects
+                            for value in node_data.values():
+                                if isinstance(value, (dict, list)):
+                                    extract_models_from_node(value)
+                        elif isinstance(node_data, list):
+                            for item in node_data:
+                                extract_models_from_node(item)
+
+                    # Extract from structured data
+                    extract_models_from_node(workflow_data)
+
+                    if models_found > 0:
+                        logging.debug(f"[Model Installer] Found {models_found} models in {json_file.name}")
 
                 except Exception as e:
-                    logging.warning(f"[Model Installer] Failed to process template {json_file.name}: {e}")
-                    continue
+                    logging.warning(f"[Model Installer] Failed to parse workflow {json_file.name}: {e}")
 
         except ImportError:
             logging.warning("[Model Installer] comfyui_workflow_templates module not available")
+            return {}
         except Exception as e:
             logging.error(f"[Model Installer] Error loading workflow templates: {e}")
+            return {}
 
-        return index
         # Convert sets to lists for JSON serialization
         serializable_index = {}
         for key, data in index.items():
