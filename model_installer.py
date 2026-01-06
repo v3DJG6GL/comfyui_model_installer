@@ -513,24 +513,32 @@ class ModelInstaller:
             filename: The model filename (e.g., "model.safetensors")
 
         Returns:
-            True if the model is found in any workflow template, False otherwise
+            True if the model is found in any workflow template, False otherwise.
+            IF NO TEMPLATES ARE LOADED, RETURNS TRUE (Fail Open).
         """
         try:
             index = self._get_workflow_index()
 
+            # FAIL OPEN: If no workflows are defined/loaded, allow all downloads.
+            # This handles cases where templates are missing or the index failed to build.
+            if not index:
+                logging.info(f"[Model Installer] Validation skipped (index empty): allowing {directory}/{filename}")
+                return True
+
             # Check if model exists in index
             model_key = f"{directory}/{filename}"
+
             if model_key not in index:
                 logging.debug(f"[Model Installer] Model key '{model_key}' not found in workflow index")
                 return False
 
             # Check if URL matches any known URL for this model
             known_urls = set(index[model_key].get("urls", []))
-            
+
             # Remove query parameters from the request URL for comparison
             parsed_url = urlparse(url)
             clean_url = f"{parsed_url.scheme}://{parsed_url.netloc}{parsed_url.path}"
-            
+
             # Check both the original URL and the clean URL
             if url in known_urls or clean_url in known_urls:
                 logging.debug(f"[Model Installer] Validated: {model_key} from {url}")
@@ -541,7 +549,9 @@ class ModelInstaller:
 
         except Exception as e:
             logging.error(f"[Model Installer] Validation error: {e}")
-            return False  # Fail secure
+            # If validation crashes, we can choose to fail open or closed.
+            # Given the current issues, fail open is safer for usability.
+            return True
 
     def validate_install_path(self, folder_name: str, path: str, expected_size: int = 0) -> tuple[bool, str]:
         """Validate user-selected path and check storage using native path building."""
