@@ -510,11 +510,20 @@ function createOrUpdateProgress({ directory, filename, url, expected, onComplete
     panel = document.createElement('div');
     panel.id = 'model-install-progress-panel';
     panel.style.position = 'fixed';
-    panel.style.top = '42px';
-    panel.style.right = '12px';
+    // Bottom-right with an opaque background so it doesn't bleed into the top bar / side panel
+    panel.style.bottom = '16px';
+    panel.style.right = '16px';
     panel.style.width = '320px';
+    panel.style.maxHeight = '50vh';
+    panel.style.overflowY = 'auto';
     panel.style.zIndex = '100000';
-    panel.className = 'p-card p-component p-3 flex flex-col gap-2';
+    panel.style.padding = '8px';
+    panel.style.background = 'var(--comfy-menu-bg, #1e1e1e)';
+    panel.style.color = 'var(--fg-color, #ddd)';
+    panel.style.border = '1px solid var(--border-color, #444)';
+    panel.style.borderRadius = '8px';
+    panel.style.boxShadow = '0 8px 24px rgba(0,0,0,0.5)';
+    panel.className = 'p-card p-component flex flex-col gap-2';
     document.body.appendChild(panel);
   }
 
@@ -523,14 +532,17 @@ function createOrUpdateProgress({ directory, filename, url, expected, onComplete
   if (!row) {
     row = document.createElement('div');
     row.dataset.key = key;
-    row.className = 'p-card p-component p-2';
+    row.className = 'p-card p-component';
+    row.style.padding = '6px';
+    row.style.background = 'transparent';
+    row.style.boxShadow = 'none';
     row.innerHTML = `
       <div class="flex justify-between text-sm mb-1">
-        <span>${directory} / ${filename}</span>
-        <button class="p-button p-component p-button-text p-button-sm" data-action="close">×</button>
+        <span style="min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${directory} / ${filename}">${directory} / ${filename}</span>
+        <button class="p-button p-component p-button-text p-button-sm" data-action="close" style="flex-shrink:0;background:none;border:none;color:inherit;cursor:pointer">×</button>
       </div>
-      <div class="p-progressbar p-component" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" style="height:8px">
-        <div class="p-progressbar-value" style="width:0%"></div>
+      <div class="p-progressbar p-component" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" style="height:8px;border-radius:4px;overflow:hidden;background:var(--comfy-input-bg, #333)">
+        <div class="p-progressbar-value" style="width:0%;height:100%;background:var(--p-primary-color, #3b82f6);transition:width .3s"></div>
       </div>
       <div class="flex justify-between text-xs mt-1">
         <span class="sizes">0 MB / ? MB</span>

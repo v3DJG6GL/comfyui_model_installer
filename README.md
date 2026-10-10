@@ -34,6 +34,13 @@ Automatically installs missing model files from workflow templates with Install/
    ```
 3. Restart ComfyUI
 
+### Docker Container (install / update in one command)
+Replace `comfyui` with your container name and `<uid>` with the user ComfyUI runs as (e.g. `1000`):
+```bash
+docker exec -u <uid> comfyui sh -c 'cd "$(find / -type d -path "*custom_nodes/comfyui_model_installer" 2>/dev/null | head -n1)" && git remote set-url origin https://github.com/v3DJG6GL/comfyui_model_installer.git && git fetch origin && git reset --hard origin/main && git log --oneline -1'
+```
+Then hard-reload the browser (Ctrl+Shift+R) or restart the container.
+
 ## Usage
 
 1. Load a workflow that requires missing models
